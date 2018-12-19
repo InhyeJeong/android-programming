@@ -247,30 +247,60 @@ public class MainActivity extends AppCompatActivity {
 
             try {
                 JSONObject root = new JSONObject(s);
+
                 Log.d("HttpConnectionLog", root.getString("title"));
                 Log.d("HttpConnectionLog", ""+(root.getInt("runningTime")));
                 Log.d("HttpConnectionLog", root.getString("openDate"));
 
-                JSONArray director = root.getJSONArray("director");
-                JSONArray actor = root.getJSONArray("actor");
-                JSONArray category = root.getJSONArray("category");
+                String title = root.getString("title");
+                String runningTime = String.valueOf(root.getInt("runningTime"));
+                String openDate = root.getString("openDate");
 
-                for(int i = 0; i < director.length(); i++) {
-                    Log.d("HttpConnectionLog", director.getString(i));
+                JSONArray director_array = root.getJSONArray("director");
+                JSONArray actor_array = root.getJSONArray("actor");
+                JSONArray category_array = root.getJSONArray("category");
+
+                //  string으로
+                String director = "";
+                String actor = "";
+                String category = "";
+
+                for(int i = 0; i < director_array.length(); i++) {
+                    //  첫번째 array에는 ","가 출력 안되도록
+                    if(i != 0) {
+                        director += ", ";
+                    }
+                    director += director_array.getString(i);
+
                 }
 
-                for(int j = 0; j < actor.length(); j++) {
-                    Log.d("HttpConnectionLog", actor.getString(j));
+                for(int j = 0; j < actor_array.length(); j++) {
+                    if(j != 0) {
+                        actor += ", ";
+                    }
+                    actor += actor_array.getString(j);
+
                 }
-                for(int t = 0; t < category.length(); t++) {
-                    Log.d("HttpConnectionLog", category.getString(t));
+                for(int t = 0; t < category_array.length(); t++) {
+                    if(t != 0) {
+                        category += ", ";
+                    }
+                    category += category_array.getString(t);
+
                 }
+                String result = "title : "  + title + "\n" +
+                                "director : " + director  + "\n" +
+                                "actor : " + actor  + "\n" +
+                                "category : " + category  + "\n" +
+                                "runningTime : " + runningTime  + "\n" + "분" +
+                                "openDate : " + openDate  + "\n";
+                tv_data.setText(result);
 
             } catch(Exception e) {
                 e.printStackTrace();
             }
 
-            tv_data.setText(s);
+
 
             this.cancel(true);
         }
