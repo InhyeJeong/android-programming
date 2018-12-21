@@ -2,28 +2,28 @@ package com.example.test.httpsession;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.media.Image;
 import android.os.AsyncTask;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.w3c.dom.Text;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.security.spec.ECField;
 import java.util.HashMap;
 import java.util.Iterator;
+
+import io.realm.Realm;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -31,32 +31,84 @@ public class MainActivity extends AppCompatActivity {
     TextView tv_data;
     ImageView iv_poster;
 
+    // db 변수생성
+    Realm mRealm;
+
+    //  onCreate
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
         //  객체 찾기
         tv_data = (TextView)findViewById(R.id.tv_data);
         iv_poster = (ImageView)findViewById(R.id.iv_poster);
+        //  변수 초기화
+        Realm.init(MainActivity.this);
+        mRealm = Realm.getDefaultInstance();    //  like singletone
 
-        String url = "http://70.12.110.50:3000";
-        HashMap<String, String> map = new HashMap<String, String>();
-        map.put("number","1");
 
-        //  onCreate함수 안에서 서버에서 가져오면 다른 것들이 동작 x
-        // 따라서 asynkTask를 활용해서 data를 불러와야함
-        MyHttpTask myHttpTask = new MyHttpTask(url, map);
-        myHttpTask.execute();
+        try {
+            //  data가 있으면 찾아주고 DB에 저장
 
-        String url_img = "http://70.12.110.50:3000/files";
-        HashMap<String, String> map_img = new HashMap<String, String>();
-        map_img.put("number","1");
+            // text target 찾기
+            MovieVO target = mRealm.where(MovieVO.class).equalTo("number", 1).findFirst();
+            //  String result에 원하는 형식으로 저장
+            String result = "title : " + target.getTitle() + //  get으로 찾기
+                            "director : " +target.getDirector() +
+                            "actor : " +  target.getActor() +
+                            "category : " + target.getCategory() +
+                            "runningTime : " + target.getRunningTime() +
+                            "openDate : " + target.getOpenDate();
+            //  tv data에 setText(result);해서 출력
+            tv_data.setText(result);
 
-        MyImageHttpTask myImageHttpTask = new MyImageHttpTask(url_img, map_img);
-        myImageHttpTask.execute();
 
+            //  image target 찾기
+            ImageVO target_image = mRealm.where(ImageVO.class).equalTo("number", 1).findFirst();
+            //  Bitmap result에 원하는 형식으로 이미지 저장
+            byte[] image_byte = target_image.getPoster();
+            //  byte->bitmap oncrate 바깥의 byteArrayToBitmap()사용
+            Bitmap image_result = byteArrayToBitmap(image_byte);
+
+            //   iv_poster data에 image_result해서 출력
+            iv_poster.setImageBitmap(image_result);
+            // 사진 찾기
+        } catch (Exception e) {
+            // 에러나면 첫번째 이미지 보여줌
+
+            //  글자
+            String url = "http://70.12.110.66:3000";
+            HashMap<String, String> map = new HashMap<String, String>();
+            map.put("number","1");
+
+            //  onCreate함수 안에서 서버에서 가져오면 다른 것들이 동작 x
+            // 따라서 asynkTask를 활용해서 data를 불러와야함
+            MyHttpTask myHttpTask = new MyHttpTask(url, map);
+            myHttpTask.execute();
+
+            //  이미지
+            String url_img = "http://70.12.110.66:3000/files";
+            HashMap<String, String> map_img = new HashMap<String, String>();
+            map_img.put("number","1");
+
+            MyImageHttpTask myImageHttpTask = new MyImageHttpTask(url_img, map_img);
+            myImageHttpTask.execute();
+        }
+
+    }   //oncreate
+
+
+    //  byte값을 bitmap으로 변환해야함
+    public Bitmap byteArrayToBitmap( byte[] byteArray ) {
+        Bitmap bitmap = BitmapFactory.decodeByteArray( byteArray, 0, byteArray.length ) ;
+        return bitmap ;
     }
 
+
+
+
+    //  이미지 받아옴
     class MyImageHttpTask extends AsyncTask<Void, Void, Bitmap> {
 
         String url_str; //  요청하려면 서버의 주소르 알아야함 //  결과물을 문자열로 받기 위한 변수
@@ -145,6 +197,27 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(Bitmap s) {
             // do something
             iv_poster.setImageBitmap(s);    //  이미지 뷰에 비트맵 이미지 표시
+
+            // bitmap(s) 복사
+            Bitmap bitmap = s.copy(s.getConfig(), true);
+            // bitmap -> byte
+            ByteArrayOutputStream stream = new ByteArrayOutputStream() ;
+            bitmap.compress( Bitmap.CompressFormat.PNG, 100, stream) ;
+            final byte[] byte_result = stream.toByteArray() ;
+
+
+            //  DB에 data 저장
+            mRealm.executeTransaction(new Realm.Transaction() {
+                @Override
+                public void execute(Realm realm) {
+                    ImageVO imageVO = realm.createObject(ImageVO.class);
+
+                    imageVO.setPoster(byte_result);//()안에 byte가 와야함...
+                    String number_string = map.get("number");
+                    int number_int = Integer.parseInt(number_string);
+                    imageVO.setNumber(number_int);
+                }
+            });
             this.cancel(true);
         }
 
@@ -154,6 +227,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    //  글자 받아옴
     class MyHttpTask extends AsyncTask<Void, Void, String> {
 
         String url_str;
@@ -252,9 +326,10 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("HttpConnectionLog", ""+(root.getInt("runningTime")));
                 Log.d("HttpConnectionLog", root.getString("openDate"));
 
-                String title = root.getString("title");
-                String runningTime = String.valueOf(root.getInt("runningTime"));
-                String openDate = root.getString("openDate");
+                final String title = root.getString("title");
+                final String runningTime = String.valueOf(root.getInt("runningTime"));
+                final String openDate = root.getString("openDate");
+                final String number = root.getString("number");
 
                 JSONArray director_array = root.getJSONArray("director");
                 JSONArray actor_array = root.getJSONArray("actor");
@@ -288,7 +363,13 @@ public class MainActivity extends AppCompatActivity {
                     category += category_array.getString(t);
 
                 }
-                String result = "title : "  + title + "\n" +
+                //  아래에서 활용하기 위한 final 변수 선언
+                final String director_final= director;
+                final String actor_final= actor;
+                final String category_final = category;
+
+                String result = "number : " + number + "\n" +
+                                "title : "  + title + "\n" +
                                 "director : " + director  + "\n" +
                                 "actor : " + actor  + "\n" +
                                 "category : " + category  + "\n" +
@@ -296,6 +377,22 @@ public class MainActivity extends AppCompatActivity {
                                 "openDate : " + openDate  + "\n";
                 tv_data.setText(result);
 
+                //  DB에 data 저장
+                mRealm.executeTransaction(new Realm.Transaction() {
+                    @Override
+                    public void execute(Realm realm) {
+                        MovieVO movieVO = realm.createObject(MovieVO.class);
+
+                        movieVO.setTitle(title);
+                        movieVO.setDirector(director_final);
+                        movieVO.setActor(actor_final);
+                        movieVO.setCategory(category_final);
+                        movieVO.setRunningTime(runningTime);
+                        movieVO.setOpenDate(openDate);
+                        movieVO.setNumber(Integer.parseInt(number));
+
+                    }
+                });
             } catch(Exception e) {
                 e.printStackTrace();
             }
